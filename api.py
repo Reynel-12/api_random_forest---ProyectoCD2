@@ -116,12 +116,20 @@ def sugerir_compra_profesional(row, mae):
 
     dias_inactivo = row.get('dias_desde_ultima_venta', 0)
 
+    # Penalización más agresiva por inactividad:
+    #   0–5  días:   sin penalización
+    #   6–10 días:   penalización moderada
+    #   11–20 días:  penalización fuerte
+    #   21–30 días:  penalización casi total
+    #   >30 días:    sin compra
     if dias_inactivo <= 5:
         factor_penalizacion = 1.0
-    elif dias_inactivo <= 15:
-        factor_penalizacion = 1.0 - ((dias_inactivo - 5) / 10) * 0.50
+    elif dias_inactivo <= 10:
+        factor_penalizacion = 0.7
+    elif dias_inactivo <= 20:
+        factor_penalizacion = 0.4
     elif dias_inactivo <= 30:
-        factor_penalizacion = 0.50 - ((dias_inactivo - 15) / 15) * 0.30
+        factor_penalizacion = 0.1
     else:
         factor_penalizacion = 0.0
 
