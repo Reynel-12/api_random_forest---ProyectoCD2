@@ -190,7 +190,16 @@ def predecir_compra():
         ventas_semanales['demanda_proxima_semana'] = ventas_semanales.groupby('codigo_producto')['cantidad_vendida'].shift(-1)
 
         # 4. Calcular features temporales por producto
-        fecha_referencia = df_ventas["fecha"].max()
+        #    Usamos una fecha de referencia "real" (hoy) o una opcional que venga en el payload.
+        #    Esto corrige el problema de que productos con última venta hace varios días
+        #    aparezcan con 0 días inactivos cuando el dataset no tiene registros recientes.
+        fecha_referencia_raw = data.get("fecha_referencia")
+        if fecha_referencia_raw:
+            # Permite que el cliente envíe explícitamente la fecha de corte (por ejemplo, fecha del inventario actual)
+            fecha_referencia = pd.to_datetime(fecha_referencia_raw)
+        else:
+            # Si no se envía, usamos la fecha actual del sistema (normalizada al inicio del día)
+            fecha_referencia = pd.Timestamp.today().normalize()
         features_temporales = []
 
         for codigo, grupo in df_ventas.groupby('codigo_producto'):
@@ -231,9 +240,17 @@ def predecir_compra():
 
         # 7. Predicción para la última semana
         ultima_foto = ventas_semanales.groupby('codigo_producto').last().reset_index()
+
+        # Limpiar codigo_producto en todos los DataFrames antes de cualquier merge
+        for df in [df_ventas, df_stock, df_features_temporales, ultima_foto]:
+            df['codigo_producto'] = df['codigo_producto'].astype(str).str.strip().str.upper()
+
         ultima_foto = ultima_foto.merge(df_stock, on="codigo_producto", how="left").fillna(0)
         ultima_foto = ultima_foto.merge(lead_time_map, on="proveedor_id", how="left").fillna(7)
+
+        # Luego el merge
         ultima_foto = ultima_foto.merge(df_features_temporales, on="codigo_producto", how="left").fillna(0)
+        #ultima_foto = ultima_foto.merge(df_features_temporales, on="codigo_producto", how="left").fillna(0)
 
         X_predict = ultima_foto[features]
         ultima_foto["demanda_predicha_7dias"] = modelo.predict(X_predict)
