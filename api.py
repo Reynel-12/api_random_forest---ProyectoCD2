@@ -103,29 +103,49 @@ def calcular_features_temporales(df_ventas_producto, fecha_referencia):
 def sugerir_compra_profesional(row, mae):
     """
     Calcula la cantidad a comprar usando punto de reorden dinámico.
-    Incorpora penalización por inactividad: si el producto lleva muchos días
-    sin venderse, se reduce la sugerencia de compra.
+    Penalización por inactividad progresiva:
+      - 0–5 días sin venta:   sin penalización (compra normal)
+      - 5–15 días sin venta:  penalización leve   (hasta -50%)
+      - 15–30 días sin venta: penalización fuerte  (hasta -80%)
+      - +30 días sin venta:   penalización máxima  (compra 0)
     """
     factor_espera = row["lead_time_dias"] / 7
     demanda_critica = row["demanda_predicha_7dias"] * factor_espera
     seguridad = (demanda_critica * 0.20) + (mae * factor_espera)
     punto_reorden = demanda_critica + seguridad
 
-    # Penalización por inactividad: si el producto lleva más de 30 días sin
-    # venderse, se aplica un descuento progresivo a la sugerencia de compra.
-    # Esto evita comprar stock de productos que ya no rotan.
     dias_inactivo = row.get('dias_desde_ultima_venta', 0)
-    if dias_inactivo > 30:
-        # Penalización máxima del 80% para productos con > 90 días sin vender
-        factor_penalizacion = max(0.20, 1.0 - (dias_inactivo - 30) / 90)
-    else:
+
+    if dias_inactivo <= 5:
         factor_penalizacion = 1.0
+    elif dias_inactivo <= 15:
+        factor_penalizacion = 1.0 - ((dias_inactivo - 5) / 10) * 0.50
+    elif dias_inactivo <= 30:
+        factor_penalizacion = 0.50 - ((dias_inactivo - 15) / 15) * 0.30
+    else:
+        factor_penalizacion = 0.0
+
+    cantidad_sin_penalizar = 0
+    cantidad_final = 0
 
     if row["stock_actual"] < punto_reorden:
-        cantidad = ((punto_reorden * 1.2) - row["stock_actual"]) * factor_penalizacion
-        return max(0, int(round(cantidad)))
-    return 0
+        cantidad_sin_penalizar = ((punto_reorden * 1.2) - row["stock_actual"])
+        cantidad_final = max(0, int(round(cantidad_sin_penalizar * factor_penalizacion)))
 
+    # --- BLOQUE DEBUG ---
+    print(f"""
+    [{row['codigo_producto']}]
+    dias_inactivo          = {dias_inactivo}
+    factor_penalizacion    = {factor_penalizacion:.2f}
+    demanda_predicha_7dias = {row['demanda_predicha_7dias']:.2f}
+    punto_reorden          = {punto_reorden:.2f}
+    stock_actual           = {row['stock_actual']}
+    cantidad_sin_penalizar = {cantidad_sin_penalizar:.2f}
+    cantidad_final         = {cantidad_final}
+    """)
+    # --- FIN DEBUG ---
+
+    return cantidad_final
 
 # --- ENDPOINT PRINCIPAL ---
 
