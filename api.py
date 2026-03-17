@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 app = Flask(__name__)
 
@@ -242,6 +242,9 @@ def predecir_compra():
         modelo = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
         modelo.fit(X, y)
         mae = mean_absolute_error(y, modelo.predict(X))
+        mse = mean_squared_error(y, modelo.predict(X))
+        rmse = np.sqrt(mse)
+        r2 = r2_score(y, modelo.predict(X))
 
         # Importancia de features para debugging/transparencia
         importancias = dict(zip(features, modelo.feature_importances_.round(4)))
@@ -296,6 +299,9 @@ def predecir_compra():
         return jsonify({
             "status": "success",
             "mae": round(mae, 2),
+            "mse": round(mse, 2),
+            "rmse": round(rmse, 2),
+            "r2": round(r2, 2),
             "importancia_features": importancias,
             "recomendaciones": resultado.to_dict(orient='records')
         })
